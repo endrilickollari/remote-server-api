@@ -19,22 +19,29 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Connect to SSH
-	err = ConnectToSSH(sshLogin.IP, sshLogin.Username, sshLogin.Port, sshLogin.Password)
+	client, err := ConnectToSSH(sshLogin.IP, sshLogin.Username, sshLogin.Port, sshLogin.Password)
 	if err != nil {
-		http.Error(w, "SSH connection failed", http.StatusUnauthorized)
+		http.Error(w, fmt.Sprintf("Failed to connect to SSH server: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	// Generate token
-	token, err := GenerateToken(sshLogin.Username)
+	sessionID := "some_unique_id"
+
+	// Store the SSH client in memory
+	StoreSession(sessionID, client)
+
+	// Generate JWT token with the session ID
+	token, err := GenerateToken(sshLogin.Username, sessionID)
 	if err != nil {
-		http.Error(w, "Token generation failed", http.StatusInternalServerError)
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
 
+	// Return the token to the user
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf(`{"token": "%s"}`, token)))
+	w.Write([]byte(fmt.Sprintf(`{"token":"%s"}`, token)))
 }
 
 func TokenValidationMiddleware(next http.HandlerFunc) http.HandlerFunc {
@@ -50,7 +57,7 @@ func TokenValidationMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		claims := &Claims{}
 		tkn, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return jwtKey, nil // return the secret key for validation
+			return JwtKey, nil // return the secret key for validation
 		})
 
 		if err != nil || !tkn.Valid {

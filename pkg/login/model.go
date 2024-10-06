@@ -13,7 +13,8 @@ type SSHLogin struct {
 }
 
 type Claims struct {
-	Username string `json:"username"`
+	Username  string `json:"username"`
+	SessionID string `json:"session_id"`
 	jwt.RegisteredClaims
 }
 
